@@ -209,7 +209,7 @@
     </div>
 
     <div class="board-container">
-        <div class="guide-text" id="guideText">👆 탭: 배치/회전 | ⏱️ 꾹: 전체삭제 | 🤏 드래그: 이동</div>
+        <div class="guide-text" id="guideText">탭: 배치/회전 | 꾹: 전체삭제 | 드래그: 이동</div>
         <div class="grid-wrapper">
             <div class="grid" id="grid"></div>
             <canvas id="laserCanvas"></canvas>
@@ -231,7 +231,7 @@
         <div class="category-tabs" id="categoryTabs">
             <button class="cat-tab active" data-cat="basic">초급</button>
             <button class="cat-tab" data-cat="intermediate">중급</button>
-            <button class="cat-tab locked" id="advTabBtn" data-cat="advanced">고급🔒</button>
+            <button class="cat-tab locked" id="advTabBtn" data-cat="advanced">고급</button>
         </div>
         
         <div class="palette" id="editorPalette"></div>
@@ -276,7 +276,6 @@
             <button class="mod-option-btn" data-mod="inv">
                 <span class="title">유저 지급 🎒</span> <span class="desc">이동O / 회전O</span>
             </button>
-            <button class="mod-option-btn" data-mod="locked" style="margin-bottom: 20px;">
                 <span class="title">잠금 (지급) 🔒</span> <span class="desc">이동O / 회전X</span>
             </button>
             <button class="close" onclick="closeModModal()">닫기</button>
@@ -386,7 +385,7 @@
 
             if (!hasTools) {
                 if (category === 'advanced' && !isUnlocked) {
-                    editorPalette.innerHTML = '<div class="empty-state-msg">잠겨 있습니다.</div>';
+                    editorPalette.innerHTML = '<div class="empty-state-msg">추후 업데이트 예정입니다.</div>';
                 } else {
                     editorPalette.innerHTML = '<div class="empty-state-msg">추후 업데이트 예정입니다.</div>';
                 }
@@ -502,7 +501,7 @@
                 btn.innerHTML = "🛠️ 에디터";
                 btn.classList.remove('test-mode');
                 document.body.classList.remove('is-test-mode');
-                guide.innerText = "👆 탭: 덧칠/회전 | ⏱️ 꾹: 삭제 | 🤏 드래그: 이동";
+                guide.innerText = "탭: 배치/회전 | 꾹: 삭제 | 드래그: 이동";
                 
                 document.getElementById('editorPalette').style.display = 'flex';
                 document.getElementById('inventoryPalette').style.display = 'none';
@@ -512,7 +511,7 @@
                 btn.innerHTML = "🎮 테스트";
                 btn.classList.add('test-mode');
                 document.body.classList.add('is-test-mode');
-                guide.innerText = "👆 탭: 배치/회전 | ⏱️ 꾹: 전체회수 | 🤏 드래그: 이동/회수";
+                guide.innerText = "탭: 배치/회전 | 꾹: 전체회수 | 드래그: 이동";
                 
                 document.getElementById('editorPalette').style.display = 'none';
                 document.getElementById('inventoryPalette').style.display = 'flex';
