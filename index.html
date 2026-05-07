@@ -986,9 +986,10 @@
                     drawLine(cx, cy, nextX, nextY, false); // 통과
                     beams.push({x: nextX, y: nextY, dir: cDir}); 
                 }
-                else if (item.type === 'block') {
-                    drawLine(cx, cy, nextX, nextY, true); // 벽에 부딪힘 (겉면 정지)
-                }
+				else if (item.type === 'block') {
+                    drawLine(cx, cy, nextX, nextY, false); // 통과
+                    beams.push({x: nextX, y: nextY, dir: cDir}); 
+				}
                 else if (item.type === 'ray' || item.type === 'target') {
                     drawLine(cx, cy, nextX, nextY, false); // 중앙까지 빛 도달 후 흡수
                 }
