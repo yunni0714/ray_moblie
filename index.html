@@ -1044,7 +1044,7 @@
                 }
                 else if(item.type === 'tunnel') {
                     let tunnelRot = item.rotation % 180;
-                    if ((tunnelRot === 0 && (cDir === 0 || cDir === 180)) || (tunnelRot === 90 && (cDir === 90 || cDir === 270))) {
+                    if ((tunnelRot === 0 && (cDir === 180 || cDir === 0)) || (tunnelRot === 90 && (cDir === 90 || cDir === 270))) {
                         drawLine(cx, cy, nextX, nextY, false); // 방향이 맞으면 통과
                         beams.push({x: nextX, y: nextY, dir: cDir});
                     } else {
