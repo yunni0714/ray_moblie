@@ -285,6 +285,16 @@
     <div id="notification">알림</div>
 
     <script>
+        // --- 1. iOS 더블탭 줌인 완벽 방지 로직 (추가됨) ---
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function (event) {
+            let now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault(); // 0.3초 이내 두 번 탭하면 줌인 무시
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+
         // --- 1. SVG 아트워크 & 카테고리 정의 ---
         const SVG_ART = {
             ray: `<svg viewBox="0 0 100 100"><circle cx="40" cy="50" r="30" fill="none" stroke="#333" stroke-width="8"/><path d="M40 50 L95 50" stroke="#333" stroke-width="8" stroke-linecap="square"/></svg>`,
@@ -930,7 +940,7 @@
             return mapData.flat().some(cell => cell && isAdvancedType(cell.type));
         }
 
-        // --- 6. 레이저 시뮬레이션 ---
+        // --- 6. 레이저 시뮬레이션 (경계면 정지 로직 추가) ---
         const DIRS = { 
             0: {dx: 1, dy: 0}, 45: {dx: 1, dy: 1}, 90: {dx: 0, dy: 1}, 135: {dx: -1, dy: 1}, 
             180: {dx: -1, dy: 0}, 225: {dx: -1, dy: -1}, 270: {dx: 0, dy: -1}, 315: {dx: 1, dy: -1} 
@@ -956,63 +966,108 @@
                 let currentBeam = beams.shift(); 
                 let cx = currentBeam.x, cy = currentBeam.y, cDir = currentBeam.dir;
                 let nextX = cx + DIRS[cDir].dx, nextY = cy + DIRS[cDir].dy;
-                if(nextX < 0 || nextX >= GRID_SIZE || nextY < 0 || nextY >= GRID_SIZE) { drawLine(cx, cy, nextX, nextY); continue; }
+                
+                // 맵 밖으로 나가면 경계선에서 정지
+                if(nextX < 0 || nextX >= GRID_SIZE || nextY < 0 || nextY >= GRID_SIZE) { 
+                    drawLine(cx, cy, nextX, nextY, true); 
+                    continue; 
+                }
                 
                 let stateKey = `${nextX},${nextY},${cDir}`;
-                if(visited.has(stateKey)) continue;
+                if(visited.has(stateKey)) {
+                    drawLine(cx, cy, nextX, nextY, false);
+                    continue;
+                }
                 visited.add(stateKey);
                 
-                drawLine(cx, cy, nextX, nextY);
                 let item = mapData[nextY][nextX];
                 
-                if (!item || item.type === 'block') { beams.push({x: nextX, y: nextY, dir: cDir}); }
+                if (!item) { 
+                    drawLine(cx, cy, nextX, nextY, false); // 통과
+                    beams.push({x: nextX, y: nextY, dir: cDir}); 
+                }
+                else if (item.type === 'block') {
+                    drawLine(cx, cy, nextX, nextY, true); // 벽에 부딪힘 (겉면 정지)
+                }
+                else if (item.type === 'ray' || item.type === 'target') {
+                    drawLine(cx, cy, nextX, nextY, false); // 중앙까지 빛 도달 후 흡수
+                }
                 else if(item.type === 'mirror_45') { 
+                    drawLine(cx, cy, nextX, nextY, false);
                     let surfaceAngle = (337.5 + item.rotation) % 360;
                     beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)}); 
                 }
                 else if(item.type === 'half_mirror_45') {
+                    drawLine(cx, cy, nextX, nextY, false);
                     let surfaceAngle = (337.5 + item.rotation) % 360;
                     beams.push({x: nextX, y: nextY, dir: cDir}); 
                     beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)}); 
                 }
                 else if (['single_mirror', 'target_mirror_a', 'target_mirror_b'].includes(item.type)) {
-                    let normal = (225 + item.rotation) % 360; let surfaceAngle = (135 + item.rotation) % 360;
+                    let normal = (225 + item.rotation) % 360; 
+                    let surfaceAngle = (135 + item.rotation) % 360;
                     let rel = (cDir - normal + 360) % 360;
-                    if (rel > 90 && rel < 270) beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)});
+                    if (rel > 90 && rel < 270) {
+                        drawLine(cx, cy, nextX, nextY, false); // 반사면 타격
+                        beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)});
+                    } else {
+                        drawLine(cx, cy, nextX, nextY, true); // 뒷면 타격 (겉면 정지)
+                    }
                 }
                 else if (item.type === 'v_target_mirror' || item.type === 'v_mirror') {
                     let normal = (item.type.includes('target')?270:90 + item.rotation) % 360;
                     let surfaceAngle = (0 + item.rotation) % 360;
                     let rel = (cDir - normal + 360) % 360;
-                    if (item.type==='v_mirror' || (rel > 90 && rel < 270)) beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)});
+                    if (item.type==='v_mirror' || (rel > 90 && rel < 270)) {
+                        drawLine(cx, cy, nextX, nextY, false); // 반사
+                        beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)});
+                    } else {
+                        drawLine(cx, cy, nextX, nextY, true); // 뒷면 (겉면 정지)
+                    }
                 }
                 else if(item.type === 'mirror') { 
+                    drawLine(cx, cy, nextX, nextY, false); // 반사
                     let surfaceAngle = (135 + item.rotation) % 360;
                     beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)}); 
                 }
                 else if(item.type === 'half_mirror') {
+                    drawLine(cx, cy, nextX, nextY, false); // 통과 및 반사
                     let surfaceAngle = (135 + item.rotation) % 360;
                     beams.push({x: nextX, y: nextY, dir: cDir}); 
                     beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)}); 
                 } 
                 else if(item.type === 'v_half_mirror') {
+                    drawLine(cx, cy, nextX, nextY, false);
                     let surfaceAngle = (0 + item.rotation) % 360;
                     beams.push({x: nextX, y: nextY, dir: cDir}); 
                     beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)});
                 }
                 else if(item.type === 'tunnel') {
                     let tunnelRot = item.rotation % 180;
-                    if ((tunnelRot === 0 && cDir !== 90 && cDir !== 270) || (tunnelRot === 90 && cDir !== 0 && cDir !== 180)) {
+                    if ((tunnelRot === 0 && (cDir === 0 || cDir === 180)) || (tunnelRot === 90 && (cDir === 90 || cDir === 270))) {
+                        drawLine(cx, cy, nextX, nextY, false); // 방향이 맞으면 통과
                         beams.push({x: nextX, y: nextY, dir: cDir});
+                    } else {
+                        drawLine(cx, cy, nextX, nextY, true); // 벽면 타격 (겉면 정지)
                     }
                 }
             }
         }
 
-        function drawLine(startX, startY, endX, endY) {
+        function drawLine(startX, startY, endX, endY, stopAtEdge = false) {
             let offset = CELL_SIZE / 2;
             let x1 = startX * CELL_SIZE + offset, y1 = startY * CELL_SIZE + offset;
-            let x2 = endX * CELL_SIZE + offset, y2 = endY * CELL_SIZE + offset;
+            let x2, y2;
+
+            // stopAtEdge가 true면 타일의 중앙이 아닌 겉면(경계)까지만 선을 그림
+            if (stopAtEdge) {
+                x2 = (startX + endX) / 2 * CELL_SIZE + offset;
+                y2 = (startY + endY) / 2 * CELL_SIZE + offset;
+            } else {
+                x2 = endX * CELL_SIZE + offset;
+                y2 = endY * CELL_SIZE + offset;
+            }
+
             ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
         }
 
