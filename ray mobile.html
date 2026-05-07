@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- OS 다크모드 강제 반전 방지 -->
+    <meta name="color-scheme" content="light only">
+    <title>Ray Mobile Tester</title>
+    <style>
+        :root { 
+            --bg-color: #f9f9f9; 
+            --text-color: #333;
+            --accent: #e74c3c; 
+            --accent-bg: #fadbd8;
+            --trash: #c0392b; 
+        }
+        
+        body { 
+            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-color);
+            font-family: 'Malgun Gothic', sans-serif; 
+            height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+            touch-action: none; 
+            -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+            color-scheme: light;
+        }
+
+        .header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 15px 20px; background: transparent; border-bottom: 2px solid #ddd;
+            height: 10%; box-sizing: border-box; min-height: 60px;
+        }
+        .header h1 { margin: 0; font-size: 20px; font-weight: 900; color: #333; }
+        
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .mode-btn {
+            padding: 8px 15px; font-size: 14px; font-weight: bold; color: white;
+            background-color: #8e44ad; border: none; border-radius: 8px;
+            cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: 0.3s;
+        }
+        .mode-btn.test-mode { background-color: #27ae60; }
+        .settings-btn { background: none; border: none; font-size: 24px; color: #666; cursor: pointer; padding: 5px; }
+
+        .board-container {
+            flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            position: relative;
+        }
+        .guide-text { color: #666; font-size: 13px; margin-bottom: 15px; text-align: center; pointer-events: none; font-weight: bold; }
+
+        .grid-wrapper {
+            position: relative; width: 95vw; height: 95vw; max-width: 500px; max-height: 500px;
+            background-color: white; padding: 2vw; box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            border-radius: 8px; box-sizing: border-box; transition: box-shadow 0.3s;
+        }
+        body.is-test-mode .grid-wrapper { box-shadow: 0 0 20px rgba(39, 174, 96, 0.4); }
+
+        .grid {
+            display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr);
+            width: 100%; height: 100%; overflow: hidden; position: relative; z-index: 1;
+        }
+
+        #laserCanvas {
+            position: absolute; top: 2vw; left: 2vw; 
+            width: calc(100% - 4vw); height: calc(100% - 4vw); pointer-events: none; z-index: 10;
+        }
+
+        .cell {
+            background-color: transparent; display: flex; justify-content: center; align-items: center;
+            position: relative; cursor: pointer;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><g stroke='%23bbbbbb' stroke-width='3' fill='none'><path d='M0 20 L0 0 L20 0'/><path d='M80 0 L100 0 L100 20'/><path d='M0 80 L0 100 L20 100'/><path d='M100 80 L100 100 L80 100'/></g></svg>");
+            background-size: cover;
+            -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+        }
+        .cell.active { background-color: #f0f8ff; } 
+        .cell .item { width: 80%; height: 80%; pointer-events: none; display: flex; justify-content: center; align-items: center; }
+        .cell .item svg { width: 100%; height: 100%; filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.15)); }
+        
+        .modifier-icons {
+            position: absolute; top: 2px; right: 2px; display: flex; gap: 2px;
+            font-size: 11px; pointer-events: none; z-index: 3;
+            background: rgba(255,255,255,0.9); border-radius: 2px; padding: 1px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        body.is-test-mode .badge-inv { display: none; } 
+
+        .toolbar {
+            display: flex; background: #eee; border-top: 2px solid #ddd; height: 50px;
+        }
+        .toolbar-btn {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            padding: 0 15px; border: none; background: transparent; color: #333;
+            font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s;
+            -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+        }
+        .toolbar-btn:active { background: #ddd; }
+        .toolbar-btn.mod-btn { justify-content: space-between; }
+        .toolbar-divider { width: 2px; background: #ddd; }
+        
+        .toolbar-btn.laser-btn.on { background-color: var(--accent-bg); color: var(--trash); }
+        
+        body.is-test-mode .toolbar-btn.mod-btn, body.is-test-mode .toolbar-divider { display: none; }
+        body.is-test-mode .toolbar-btn.laser-btn { flex: 100%; }
+
+        .bottom-bar {
+            height: 15%; background: #fff; border-top: 2px solid #ddd;
+            display: flex; align-items: stretch; padding: 10px 10px; gap: 10px; min-height: 80px; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        }
+        
+        /* 세로형 카테고리 탭 추가 */
+        .category-tabs {
+            display: flex; flex-direction: column; width: 45px;
+            border-right: 1px solid #ddd; padding-right: 5px; flex-shrink: 0;
+        }
+        .cat-tab {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            background: transparent; border: none; border-left: 3px solid transparent;
+            color: #888; font-size: 12px; font-weight: bold; padding: 0; margin: 0;
+            cursor: pointer; transition: 0.2s;
+        }
+        .cat-tab.active { color: var(--accent); border-left-color: var(--accent); background: #fdfefe; }
+        .cat-tab.locked { opacity: 0.5; }
+        body.unlocked .cat-tab.locked { opacity: 1; }
+        
+        body.is-test-mode .category-tabs { display: none; }
+
+        .palette {
+            display: flex; gap: 10px; overflow-x: auto; flex: 1; scrollbar-width: none; align-items: center;
+        }
+        .palette::-webkit-scrollbar { display: none; }
+        
+        .tool-btn {
+            min-width: 60px; height: 60px; border-radius: 8px; background: #fff; border: 2px solid #ccc;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            font-size: 11px; font-weight: bold; color: #666; transition: 0.2s; cursor: pointer; flex-shrink: 0; position: relative;
+            -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+        }
+        .tool-btn .icon { width: 35px; height: 35px; margin-bottom: 2px; }
+        .tool-btn .icon svg { width: 100%; height: 100%; }
+        .tool-btn.selected { border-color: var(--accent); background: var(--accent-bg); transform: translateY(-3px); box-shadow: 0 4px 10px rgba(231, 76, 60, 0.2); color: #c0392b; }
+        
+        .inv-count {
+            position: absolute; bottom: -5px; right: -5px; background: #e74c3c; color: white;
+            border-radius: 10px; padding: 2px 6px; font-size: 10px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .eraser-zone {
+            min-width: 60px; height: 60px; background: #fdfefe; border: 2px dashed #e74c3c;
+            border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 24px;
+            color: var(--trash); transition: all 0.2s; cursor: pointer; flex-shrink: 0; align-self: center;
+            -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+        }
+        .eraser-zone.selected { background: var(--trash); color: white; border-style: solid; box-shadow: 0 4px 10px rgba(231, 76, 60, 0.3); }
+        .eraser-zone.drag-over { background: var(--trash); color: white; transform: scale(1.1); }
+
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 100; backdrop-filter: blur(3px);
+        }
+        .modal { background: #fff; width: 85%; max-width: 400px; border-radius: 12px; padding: 20px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .modal h3 { color: #333; margin-top: 0; }
+        
+        /* 🚨 iOS 줌인 방지를 위해 16px 강제 적용 */
+        .modal textarea {
+            width: 100%; height: 150px; background: #f8f9fa; color: #333; border: 1px solid #ced4da;
+            padding: 10px; font-family: monospace; font-size: 16px; /* iOS 자동 확대 방지 */
+            box-sizing: border-box; margin-bottom: 15px; border-radius: 5px;
+            -webkit-touch-callout: default; -webkit-user-select: text; user-select: text;
+        }
+        .modal button {
+            width: 100%; padding: 12px; color: white; border: none;
+            border-radius: 8px; font-weight: bold; font-size: 16px; margin-bottom: 10px; cursor: pointer;
+        }
+        .btn-green { background: #27ae60; }
+        .btn-blue { background: #2980b9; }
+        .modal button.close { background: #95a5a6; }
+
+        .mod-option-btn {
+            width: 100%; padding: 15px; background-color: #ffffff; border: 1px solid #ccc;
+            border-radius: 8px; margin-bottom: 8px; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center; text-align: left;
+        }
+        .mod-option-btn .title { color: #000000; font-weight: bold; font-size: 15px; }
+        .mod-option-btn .desc { color: #555555; font-size: 12px; }
+        .mod-option-btn.selected { background-color: var(--accent-bg); border-color: var(--accent); }
+        .mod-option-btn.selected .title { color: var(--trash); font-weight: 900; }
+        .mod-option-btn.selected .desc { color: var(--trash); }
+
+        .drag-ghost {
+            position: fixed; width: 60px; height: 60px; pointer-events: none; z-index: 9999; opacity: 0.9;
+            display: flex; justify-content: center; align-items: center; filter: drop-shadow(0 15px 15px rgba(0,0,0,0.3)); margin: 0; padding: 0;
+        }
+        .drag-ghost svg { width: 100%; height: 100%; }
+        
+        #notification {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(44, 62, 80, 0.9); color: white; padding: 10px 20px; border-radius: 20px;
+            font-size: 14px; font-weight: bold; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 200;
+        }
+        
+        .empty-state-msg { color: #aaa; font-size: 13px; font-weight: bold; margin: auto; text-align: center; width: 100%; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Project Ray <span style="font-size: 12px; font-weight:normal; color:#888;">Mobile</span></h1>
+        <div class="header-actions">
+            <button class="mode-btn" id="modeToggleBtn" onclick="toggleMode()">🛠️ 에디터</button>
+            <button class="settings-btn" id="openSettings">⚙️</button>
+        </div>
+    </div>
+
+    <div class="board-container">
+        <div class="guide-text" id="guideText">탭: 배치/회전 | 꾹: 전체삭제 | 드래그: 이동</div>
+        <div class="grid-wrapper">
+            <div class="grid" id="grid"></div>
+            <canvas id="laserCanvas"></canvas>
+        </div>
+    </div>
+
+    <!-- 5:5 툴바 영역 -->
+    <div class="toolbar" id="topToolbar">
+        <button class="toolbar-btn laser-btn" id="laserToggleBtn" onclick="toggleLaser()">
+            🔴 레이저 켜기
+        </button>
+        <div class="toolbar-divider"></div>
+        <button class="toolbar-btn mod-btn" onclick="openModModal()" style="justify-content: center;">
+            <span id="modStatusText" style="color: #c0392b;">일반 배치 ▽</span>
+        </button>
+    </div>
+
+    <div class="bottom-bar">
+        <div class="category-tabs" id="categoryTabs">
+            <button class="cat-tab active" data-cat="basic">초급</button>
+            <button class="cat-tab" data-cat="intermediate">중급</button>
+            <button class="cat-tab locked" id="advTabBtn" data-cat="advanced">고급</button>
+        </div>
+        
+        <div class="palette" id="editorPalette"></div>
+        <div class="palette" id="inventoryPalette" style="display: none;"></div>
+        
+        <div class="eraser-zone" id="eraserZone" data-tool="Eraser">🗑️</div>
+    </div>
+
+    <!-- 전체 삭제/회수 커스텀 모달 -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal" style="text-align: center;">
+            <h3 style="margin-top:0;" id="confirmTitle">전체 삭제</h3>
+            <p style="color:#666; margin-bottom:20px;" id="confirmDesc">맵의 모든 기물을 삭제하시겠습니까?</p>
+            <div style="display: flex; gap: 10px;">
+                <button class="close" onclick="closeConfirmModal()" style="margin-bottom:0;">취소</button>
+                <button id="confirmBtn" style="background: #e74c3c; margin-bottom:0;" onclick="executeClearAll()">삭제</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 동기화 모달 -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <h3>데이터 동기화</h3>
+            <textarea id="jsonInput" placeholder="PC 에디터의 JSON 코드를 붙여넣으세요..."></textarea>
+            <button class="btn-green" id="importBtn">맵 적용하기 (가져오기)</button>
+            <button class="btn-blue" id="exportBtn">맵 코드 추출 (복사하기)</button>
+            <button class="close" id="closeSettings">닫기</button>
+        </div>
+    </div>
+
+    <!-- 특성 설정 모달 -->
+    <div class="modal-overlay" id="modModalOverlay">
+        <div class="modal">
+            <h3 style="margin-top:0; margin-bottom: 15px;">기물 특성 설정</h3>
+            <button class="mod-option-btn selected" data-mod="normal">
+                <span class="title">일반 배치</span> <span class="desc">맵 고정</span>
+            </button>
+            <button class="mod-option-btn" data-mod="rotatable">
+                <span class="title">회전 가능 🔄</span> <span class="desc">맵 고정 / 회전O</span>
+            </button>
+            <button class="mod-option-btn" data-mod="inv">
+                <span class="title">유저 지급 🎒</span> <span class="desc">이동O / 회전O</span>
+            </button>
+                <span class="title">잠금 (지급) 🔒</span> <span class="desc">이동O / 회전X</span>
+            </button>
+            <button class="close" onclick="closeModModal()">닫기</button>
+        </div>
+    </div>
+    
+    <div id="notification">알림</div>
+
+    <script>
+        // --- 1. iOS 더블탭 줌인 완벽 방지 로직 (추가됨) ---
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function (event) {
+            let now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault(); // 0.3초 이내 두 번 탭하면 줌인 무시
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+
+        // --- 1. SVG 아트워크 & 카테고리 정의 ---
+        const SVG_ART = {
+            ray: `<svg viewBox="0 0 100 100"><circle cx="40" cy="50" r="30" fill="none" stroke="#333" stroke-width="8"/><path d="M40 50 L95 50" stroke="#333" stroke-width="8" stroke-linecap="square"/></svg>`,
+            target: `<svg viewBox="0 0 100 100"><path d="M50 12 L88 50 L50 88 L12 50 Z" fill="none" stroke="#333" stroke-width="8" stroke-linejoin="miter"/><path d="M69 50 L78 41 L88 50 L78 59 Z" fill="none" stroke="#333" stroke-width="8" stroke-linejoin="miter"/></svg>`,
+            mirror: `<svg viewBox="0 0 100 100"><path d="M15 85 L85 15" stroke="#333" stroke-width="10" stroke-linecap="square"/></svg>`,
+            half_mirror: `<svg viewBox="0 0 100 100"><path d="M10 80 L70 20 M30 90 L90 30" stroke="#333" stroke-width="8" stroke-linecap="square"/></svg>`,
+            block: `<svg viewBox="0 0 100 100"><path d="M15 15 L85 85 M85 15 L15 85" stroke="#333" stroke-width="10" stroke-linecap="square"/></svg>`,
+            tunnel: `<svg viewBox="0 0 100 100"><path d="M20 30 L80 30 M20 70 L80 70" stroke="#333" stroke-width="10" stroke-linecap="square"/></svg>`,
+            single_mirror: `<svg viewBox="0 0 100 100"><path d="M15 85 L85 15 L85 85 Z" fill="none" stroke="#333" stroke-width="10" stroke-linejoin="miter"/></svg>`,
+            target_mirror_a: `<svg viewBox="0 0 100 100"><path d="M15 85 L85 15 L85 85 Z" fill="none" stroke="#333" stroke-width="10" stroke-linejoin="miter"/><rect x="40" y="65" width="20" height="20" fill="none" stroke="#333" stroke-width="8"/></svg>`,
+            target_mirror_b: `<svg viewBox="0 0 100 100"><path d="M15 85 L85 15 L85 85 Z" fill="none" stroke="#333" stroke-width="10" stroke-linejoin="miter"/><rect x="65" y="40" width="20" height="20" fill="none" stroke="#333" stroke-width="8"/></svg>`
+        };
+
+        const TOOL_DICT = {
+            'ray': { name: 'Ray', svg: SVG_ART.ray, cat: 'basic' },
+            'target': { name: '표적', svg: SVG_ART.target, cat: 'basic' },
+            'mirror': { name: '거울', svg: SVG_ART.mirror, cat: 'basic' },
+            'half_mirror': { name: '반거울', svg: SVG_ART.half_mirror, cat: 'basic' },
+            'block': { name: '블록', svg: SVG_ART.block, cat: 'basic' },
+            'tunnel': { name: '터널', svg: SVG_ART.tunnel, cat: 'basic' },
+            'single_mirror': { name: '단면거울', svg: SVG_ART.single_mirror, cat: 'basic' },
+            'target_mirror_a': { name: '표적거울A', svg: SVG_ART.target_mirror_a, cat: 'basic' },
+            'target_mirror_b': { name: '표적거울B', svg: SVG_ART.target_mirror_b, cat: 'basic' }
+        };
+
+        // --- 2. 상태 및 상수 ---
+        const GRID_SIZE = 5;
+        const CELL_SIZE = 100;
+        let mapData = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(null));
+        let selectedTool = 'ray';
+        let isUnlocked = false;
+
+        let currentMod = 'normal'; 
+        let hasPlacedSinceSelection = false; 
+
+        let isEditorMode = true;
+        let editorMapDataBackup = null;
+        let playerInventory = {};
+        
+        let isLaserOn = false; 
+
+        const canvas = document.getElementById('laserCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = CELL_SIZE * GRID_SIZE;
+        canvas.height = CELL_SIZE * GRID_SIZE;
+
+        function showNoti(msg) {
+            const noti = document.getElementById('notification');
+            noti.innerText = msg;
+            noti.style.opacity = '1';
+            setTimeout(() => noti.style.opacity = '0', 1500);
+        }
+        function vibrate(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); }
+
+        function updateLaser() {
+            if (isLaserOn) simulateLaser();
+            else ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function toggleLaser() {
+            isLaserOn = !isLaserOn;
+            const btn = document.getElementById('laserToggleBtn');
+            if (isLaserOn) {
+                btn.innerHTML = "🟢 레이저 끄기";
+                btn.classList.add('on');
+                updateLaser();
+                showNoti("레이저 켜짐");
+            } else {
+                btn.innerHTML = "🔴 레이저 켜기";
+                btn.classList.remove('on');
+                updateLaser();
+                showNoti("레이저 꺼짐");
+            }
+        }
+
+        // --- 3. UI 세팅 (카테고리 탭 렌더링 포함) ---
+        const editorPalette = document.getElementById('editorPalette');
+        
+        function renderEditorPalette(category) {
+            editorPalette.innerHTML = '';
+            let hasTools = false;
+            
+            Object.keys(TOOL_DICT).forEach(key => {
+                const tool = TOOL_DICT[key];
+                if (tool.cat === category) {
+                    // 고급 탭이 잠겨있을 때는 아이템을 그리지 않음
+                    if (category === 'advanced' && !isUnlocked) return;
+
+                    hasTools = true;
+                    const btn = document.createElement('div');
+                    btn.className = `tool-btn ${selectedTool === key ? 'selected' : ''}`;
+                    btn.dataset.tool = key;
+                    btn.innerHTML = `<div class="icon">${tool.svg}</div>${tool.name}`;
+                    bindPaletteEvent(btn, key, false);
+                    editorPalette.appendChild(btn);
+                }
+            });
+
+            if (!hasTools) {
+                if (category === 'advanced' && !isUnlocked) {
+                    editorPalette.innerHTML = '<div class="empty-state-msg">추후 업데이트 예정입니다.</div>';
+                } else {
+                    editorPalette.innerHTML = '<div class="empty-state-msg">추후 업데이트 예정입니다.</div>';
+                }
+                selectedTool = null;
+                document.getElementById('eraserZone').classList.remove('selected');
+            }
+        }
+
+        // 초기 렌더링
+        renderEditorPalette('basic');
+
+        // 카테고리 탭 클릭 이벤트 (비밀번호 잠금 처리 해제 및 빈 창 표시)
+        document.querySelectorAll('.cat-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const targetCat = this.dataset.cat;
+                
+                document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                renderEditorPalette(targetCat);
+            });
+        });
+
+        function bindPaletteEvent(btn, toolData, isInv) {
+            btn.addEventListener('pointerdown', function() {
+                if (this.classList.contains('selected')) {
+                    this.classList.remove('selected');
+                    selectedTool = null;
+                    showNoti("빈손 모드 (특성 덧칠 & 회전 전용)");
+                } else {
+                    document.querySelectorAll('.tool-btn, .eraser-zone').forEach(b => b.classList.remove('selected'));
+                    this.classList.add('selected');
+                    selectedTool = isInv ? toolData : btn.dataset.tool;
+
+                    if (hasPlacedSinceSelection && currentMod !== 'normal') {
+                        resetModifierToNormal();
+                        showNoti("특성 초기화됨");
+                    }
+                }
+                hasPlacedSinceSelection = false;
+            });
+        }
+
+        // --- 안전한 커스텀 모달 전체 삭제/회수 로직 ---
+        let eraserHoldTimer = null;
+        const eraserBtn = document.getElementById('eraserZone');
+
+        function closeConfirmModal() { document.getElementById('confirmModal').style.display = 'none'; }
+        
+        function executeClearAll() {
+            if (isEditorMode) {
+                mapData = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(null));
+                document.querySelectorAll('.grid .cell').forEach(cell => {
+                    updateCellVisual(cell, null);
+                });
+                showNoti("맵이 전체 초기화되었습니다.");
+            } else {
+                let recovered = false;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        let item = mapData[r][c];
+                        if (item && item.isInventory) {
+                            refundToInventory(item);
+                            mapData[r][c] = null;
+                            const cell = document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
+                            updateCellVisual(cell, null);
+                            recovered = true;
+                        }
+                    }
+                }
+                if (recovered) showNoti("모든 배치 기물을 회수했습니다.");
+                else showNoti("회수할 기물이 없습니다.");
+            }
+            
+            updateLaser();
+            vibrate([100, 50, 100]);
+            closeConfirmModal();
+        }
+
+        eraserBtn.addEventListener('pointerdown', function(e) {
+            if (!e.isPrimary) return;
+            e.preventDefault();
+
+            if (this.classList.contains('selected')) {
+                this.classList.remove('selected');
+                selectedTool = null;
+            } else {
+                document.querySelectorAll('.tool-btn, .eraser-zone').forEach(b => b.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedTool = 'Eraser';
+                if (hasPlacedSinceSelection && currentMod !== 'normal') resetModifierToNormal();
+            }
+            hasPlacedSinceSelection = false;
+
+            eraserHoldTimer = setTimeout(() => {
+                document.getElementById('confirmTitle').innerText = isEditorMode ? "전체 삭제" : "전체 회수";
+                document.getElementById('confirmDesc').innerText = isEditorMode ? "맵의 모든 기물을 삭제하시겠습니까?" : "배치한 모든 기물을 인벤토리로 회수하시겠습니까?";
+                document.getElementById('confirmBtn').innerText = isEditorMode ? "삭제" : "회수";
+                document.getElementById('confirmModal').style.display = 'flex';
+                vibrate(50);
+            }, 800);
+        });
+        eraserBtn.addEventListener('pointerup', () => { if (eraserHoldTimer) clearTimeout(eraserHoldTimer); });
+        eraserBtn.addEventListener('pointercancel', () => { if (eraserHoldTimer) clearTimeout(eraserHoldTimer); });
+        eraserBtn.addEventListener('pointerleave', () => { if (eraserHoldTimer) clearTimeout(eraserHoldTimer); });
+
+        // 모드 전환
+        function toggleMode() {
+            isEditorMode = !isEditorMode;
+            const btn = document.getElementById('modeToggleBtn');
+            const guide = document.getElementById('guideText');
+            
+            if (isEditorMode) {
+                btn.innerHTML = "🛠️ 에디터";
+                btn.classList.remove('test-mode');
+                document.body.classList.remove('is-test-mode');
+                guide.innerText = "탭: 배치/회전 | 꾹: 삭제 | 드래그: 이동";
+                
+                document.getElementById('editorPalette').style.display = 'flex';
+                document.getElementById('inventoryPalette').style.display = 'none';
+                
+                if (editorMapDataBackup) mapData = JSON.parse(JSON.stringify(editorMapDataBackup));
+            } else {
+                btn.innerHTML = "🎮 테스트";
+                btn.classList.add('test-mode');
+                document.body.classList.add('is-test-mode');
+                guide.innerText = "탭: 배치/회전 | 꾹: 전체회수 | 드래그: 이동";
+                
+                document.getElementById('editorPalette').style.display = 'none';
+                document.getElementById('inventoryPalette').style.display = 'flex';
+                
+                editorMapDataBackup = JSON.parse(JSON.stringify(mapData));
+                playerInventory = {};
+                
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        let cellData = mapData[r][c];
+                        if (cellData && cellData.isInventory) {
+                            refundToInventory(cellData);
+                            mapData[r][c] = null;
+                        }
+                    }
+                }
+                renderInventoryUI();
+            }
+            
+            selectedTool = null;
+            document.querySelectorAll('.tool-btn, .eraser-zone').forEach(b => b.classList.remove('selected'));
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
+                    updateCellVisual(cell, mapData[r][c]);
+                }
+            }
+            updateLaser();
+        }
+
+        function refundToInventory(data) {
+            if (!data) return;
+            let key = `${data.type}_${data.canRotate}`;
+            if (!playerInventory[key]) playerInventory[key] = { count: 0, type: data.type, canRotate: data.canRotate };
+            playerInventory[key].count++;
+            if (!isEditorMode) renderInventoryUI();
+        }
+
+        function renderInventoryUI() {
+            const invContainer = document.getElementById('inventoryPalette');
+            invContainer.innerHTML = '';
+            let hasItems = false;
+            for (let key in playerInventory) {
+                let data = playerInventory[key];
+                if (data.count > 0) {
+                    hasItems = true;
+                    const toolInfo = TOOL_DICT[data.type];
+                    const btn = document.createElement('div');
+                    btn.className = `tool-btn`;
+                    if (selectedTool && selectedTool.invKey === key) btn.classList.add('selected');
+
+                    let badges = data.canRotate === false ? '<span style="color:#e74c3c;">🔒</span>' : '';
+
+                    btn.innerHTML = `
+                        <div class="icon" style="position:relative;">
+                            ${toolInfo.svg}
+                            <div style="position:absolute; top:-5px; right:-5px; font-size:10px;">${badges}</div>
+                            <div class="inv-count">x${data.count}</div>
+                        </div>
+                        ${toolInfo.name}
+                    `;
+                    bindPaletteEvent(btn, { type: data.type, isInvTool: true, invKey: key, canRotate: data.canRotate }, true);
+                    invContainer.appendChild(btn);
+                }
+            }
+            if (!hasItems) {
+                invContainer.innerHTML = '<div class="empty-state-msg">지급된 기물이 없습니다.</div>';
+                selectedTool = null;
+            }
+        }
+
+        // --- 특성 설정 모달 및 스마트 토글 로직 ---
+        function openModModal() { document.getElementById('modModalOverlay').style.display = 'flex'; }
+        function closeModModal() { document.getElementById('modModalOverlay').style.display = 'none'; }
+        
+        function resetModifierToNormal() {
+            document.querySelectorAll('.mod-option-btn').forEach(b => b.classList.remove('selected'));
+            document.querySelector('.mod-option-btn[data-mod="normal"]').classList.add('selected');
+            currentMod = 'normal';
+            document.getElementById('modStatusText').innerText = '일반 배치 ▽';
+        }
+
+        document.querySelectorAll('.mod-option-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (this.classList.contains('selected')) {
+                    resetModifierToNormal();
+                    showNoti("특성 선택 취소 (일반 배치)");
+                } else {
+                    document.querySelectorAll('.mod-option-btn').forEach(b => b.classList.remove('selected'));
+                    this.classList.add('selected');
+                    currentMod = this.dataset.mod;
+                    
+                    const statusText = document.getElementById('modStatusText');
+                    if (currentMod === 'normal') statusText.innerText = '일반 배치 ▽';
+                    else if (currentMod === 'rotatable') statusText.innerText = '회전 가능 🔄 ▽';
+                    else if (currentMod === 'inv') statusText.innerText = '유저 지급 🎒 ▽';
+                    else if (currentMod === 'locked') statusText.innerText = '잠금 (지급) 🔒 ▽';
+                    
+                    if (selectedTool !== null && selectedTool !== 'Eraser' && hasPlacedSinceSelection) {
+                        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('selected'));
+                        selectedTool = null;
+                        showNoti("기물 선택 해제 (특성 덧칠 모드)");
+                    } else {
+                        showNoti("특성이 변경되었습니다.");
+                    }
+                }
+                hasPlacedSinceSelection = false;
+                closeModModal();
+            });
+        });
+
+        function applyCurrentMod(targetItem) {
+            if (currentMod === 'normal') { targetItem.isInventory = false; targetItem.canMove = false; targetItem.canRotate = false; }
+            else if (currentMod === 'rotatable') { targetItem.isInventory = false; targetItem.canMove = false; targetItem.canRotate = true; }
+            else if (currentMod === 'inv') { targetItem.isInventory = true; targetItem.canMove = true; targetItem.canRotate = true; }
+            else if (currentMod === 'locked') { targetItem.isInventory = true; targetItem.canMove = true; targetItem.canRotate = false; }
+        }
+
+        function isModMatch(item, mod) {
+            if (mod === 'normal') return item.isInventory === false && item.canMove === false && item.canRotate === false;
+            if (mod === 'rotatable') return item.isInventory === false && item.canMove === false && item.canRotate === true;
+            if (mod === 'inv') return item.isInventory === true && item.canMove === true && item.canRotate === true;
+            if (mod === 'locked') return item.isInventory === true && item.canMove === true && item.canRotate === false;
+            return false;
+        }
+
+        // 설정 모달 (비밀번호 연결 수정)
+        document.getElementById('openSettings').onclick = () => document.getElementById('modalOverlay').style.display = 'flex';
+        document.getElementById('closeSettings').onclick = () => document.getElementById('modalOverlay').style.display = 'none';
+        document.getElementById('jsonInput').addEventListener('input', function() {
+            if (!isUnlocked && this.value.includes("save my 8 hours")) {
+                document.body.classList.add('unlocked');
+                document.getElementById('advTabBtn').innerText = '고급'; // 자물쇠 아이콘 제거
+                this.value = this.value.replace("save my 8 hours", '');
+                isUnlocked = true;
+                // 해금되었을 때 현재 활성화된 탭을 다시 렌더링하여 내용물을 보여줌
+                const activeTab = document.querySelector('.cat-tab.active');
+                if(activeTab) renderEditorPalette(activeTab.dataset.cat);
+                showNoti("상급 기물이 해금되었습니다!");
+            }
+        });
+
+        // --- 4. 포인터(터치) 제스처 ---
+        let holdTimer = null;
+        let isDragging = false;
+        let wasLongPressed = false;
+        let dragSourceInfo = null; 
+        let dragGhost = null;
+        let touchStartX = 0, touchStartY = 0;
+
+        const gridElement = document.getElementById('grid');
+
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.row = r;
+                cell.dataset.col = c;
+
+                cell.addEventListener('pointerdown', (e) => {
+                    if (!e.isPrimary) return;
+                    e.preventDefault(); 
+                    touchStartX = e.clientX;
+                    touchStartY = e.clientY;
+                    wasLongPressed = false;
+                    
+                    const item = mapData[r][c];
+                    cell.classList.add('active');
+
+                    if (item) {
+                        if (!isEditorMode && item.canMove === false) return;
+
+                        dragSourceInfo = { r, c, item: JSON.parse(JSON.stringify(item)) };
+                        
+                        if (isEditorMode || item.canMove !== false) {
+                            holdTimer = setTimeout(() => {
+                                if (!isDragging) {
+                                    wasLongPressed = true;
+                                    if (!isEditorMode && item.isInventory) {
+                                        refundToInventory(item);
+                                        showNoti("회수됨");
+                                    } else {
+                                        showNoti("삭제됨");
+                                    }
+                                    
+                                    mapData[r][c] = null;
+                                    updateCellVisual(cell, null);
+                                    updateLaser();
+                                    vibrate([50, 50]); 
+                                    cell.style.backgroundColor = '#fadbd8';
+                                    setTimeout(() => cell.style.backgroundColor = '', 200);
+                                    dragSourceInfo = null; 
+                                }
+                            }, 500);
+                        }
+                    }
+                });
+
+                cell.addEventListener('pointermove', (e) => {
+                    if (!e.isPrimary || !dragSourceInfo) return;
+                    
+                    const dx = e.clientX - touchStartX;
+                    const dy = e.clientY - touchStartY;
+
+                    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+                        
+                        if (!isDragging && (isEditorMode || dragSourceInfo.item.canMove !== false)) {
+                            isDragging = true;
+                            mapData[r][c] = null;
+                            updateCellVisual(cell, null);
+                            updateLaser();
+                            
+                            dragGhost = document.createElement('div');
+                            dragGhost.className = 'drag-ghost';
+                            const rot = dragSourceInfo.item.rotation || 0;
+                            const svgHtml = TOOL_DICT[dragSourceInfo.item.type]?.svg || '';
+                            dragGhost.innerHTML = `<div style="transform: rotate(${rot}deg); width:100%; height:100%;">${svgHtml}</div>`;
+                            document.body.appendChild(dragGhost);
+                        }
+                    }
+
+                    if (isDragging && dragGhost) {
+                        dragGhost.style.left = e.clientX - (dragGhost.offsetWidth / 2) + 'px';
+                        dragGhost.style.top = e.clientY - (dragGhost.offsetHeight / 2) + 'px';
+
+                        const elemBelow = document.elementFromPoint(e.clientX, e.clientY);
+                        if (elemBelow && elemBelow.closest('#eraserZone')) {
+                            document.getElementById('eraserZone').classList.add('drag-over');
+                        } else {
+                            document.getElementById('eraserZone').classList.remove('drag-over');
+                        }
+                    }
+                });
+
+                cell.addEventListener('pointerup', (e) => {
+                    if (!e.isPrimary) return;
+                    cell.classList.remove('active');
+                    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+                    if (wasLongPressed) return;
+
+                    if (isDragging) {
+                        const elemBelow = document.elementFromPoint(e.clientX, e.clientY);
+                        if (elemBelow && elemBelow.closest('#eraserZone')) {
+                            if (!isEditorMode && dragSourceInfo.item.isInventory) { refundToInventory(dragSourceInfo.item); showNoti("회수됨"); } 
+                            else { showNoti("버림"); }
+                            vibrate(50);
+                        } else {
+                            let dropCell = elemBelow ? elemBelow.closest('.cell') : null;
+                            if (dropCell) {
+                                let tr = parseInt(dropCell.dataset.row);
+                                let tc = parseInt(dropCell.dataset.col);
+                                let targetItem = mapData[tr][tc];
+
+                                if (targetItem && !isEditorMode && targetItem.canMove === false) {
+                                    mapData[r][c] = dragSourceInfo.item;
+                                    showNoti("잠긴 기물과 교환할 수 없습니다.");
+                                } else {
+                                    mapData[tr][tc] = dragSourceInfo.item;
+                                    mapData[r][c] = targetItem;
+                                    updateCellVisual(dropCell, mapData[tr][tc]);
+                                }
+                            } else {
+                                mapData[r][c] = dragSourceInfo.item;
+                            }
+                        }
+                        
+                        updateCellVisual(cell, mapData[r][c]);
+                        if (dragGhost) dragGhost.remove();
+                        document.getElementById('eraserZone').classList.remove('drag-over');
+                        isDragging = false;
+                        dragSourceInfo = null;
+                        updateLaser();
+                        return;
+                    }
+
+                    let item = mapData[r][c];
+
+                    if (isEditorMode) {
+                        if (selectedTool === 'Eraser') {
+                            if (item) { mapData[r][c] = null; updateCellVisual(cell, null); vibrate(20); hasPlacedSinceSelection = true; }
+                        } 
+                        else if (selectedTool === null) {
+                            if (item) {
+                                if (!isModMatch(item, currentMod)) {
+                                    applyCurrentMod(item);
+                                    showNoti("특성 적용됨");
+                                } else {
+                                    executeRotation(r, c);
+                                }
+                                updateCellVisual(cell, item);
+                                vibrate(10);
+                                hasPlacedSinceSelection = true;
+                            }
+                        } 
+                        else {
+                            if (item) {
+                                if (item.type === selectedTool) {
+                                    if (!isModMatch(item, currentMod)) {
+                                        applyCurrentMod(item);
+                                        showNoti("특성 적용됨");
+                                    } else {
+                                        executeRotation(r, c);
+                                    }
+                                    updateCellVisual(cell, item);
+                                    vibrate(10);
+                                    hasPlacedSinceSelection = true;
+                                } else {
+                                    mapData[r][c] = { type: selectedTool, rotation: 0 };
+                                    applyCurrentMod(mapData[r][c]); 
+                                    updateCellVisual(cell, mapData[r][c]);
+                                    vibrate(10);
+                                    hasPlacedSinceSelection = true;
+                                }
+                            } else {
+                                mapData[r][c] = { type: selectedTool, rotation: 0 };
+                                applyCurrentMod(mapData[r][c]); 
+                                updateCellVisual(cell, mapData[r][c]);
+                                vibrate(10);
+                                hasPlacedSinceSelection = true;
+                            }
+                        }
+                    } else {
+                        // [테스트 모드 유저 제약]
+                        if (selectedTool === 'Eraser') {
+                            if (item && item.canMove !== false) {
+                                if (item.isInventory) refundToInventory(item);
+                                mapData[r][c] = null; updateCellVisual(cell, null); vibrate(20);
+                            } else if (item) { showNoti("고정된 기물입니다."); }
+                        } 
+                        else if (selectedTool === null) {
+                            if (item && item.canRotate !== false) {
+                                executeRotation(r, c); updateCellVisual(cell, item); vibrate(10);
+                            } else if (item) { showNoti("회전이 잠긴 기물입니다."); }
+                        } 
+                        else if (selectedTool.isInvTool) {
+                            if (item) {
+                                if (item.type === selectedTool.type) {
+                                    if (item.canRotate !== false) {
+                                        executeRotation(r, c); updateCellVisual(cell, item); vibrate(10);
+                                    } else { showNoti("회전이 잠긴 기물입니다."); }
+                                } else if (item.canMove !== false) {
+                                    if (item.isInventory) refundToInventory(item);
+                                    mapData[r][c] = { type: selectedTool.type, rotation: 0, canMove: true, canRotate: selectedTool.canRotate, isInventory: true };
+                                    playerInventory[selectedTool.invKey].count--;
+                                    renderInventoryUI(); updateCellVisual(cell, mapData[r][c]); vibrate(10);
+                                } else { showNoti("고정된 기물 위에 놓을 수 없습니다."); }
+                            } else {
+                                if (playerInventory[selectedTool.invKey].count > 0) {
+                                    mapData[r][c] = { type: selectedTool.type, rotation: 0, canMove: true, canRotate: selectedTool.canRotate, isInventory: true };
+                                    playerInventory[selectedTool.invKey].count--;
+                                    renderInventoryUI(); updateCellVisual(cell, mapData[r][c]); vibrate(10);
+                                }
+                            }
+                        }
+                    }
+                    updateLaser();
+                    dragSourceInfo = null;
+                });
+                
+                cell.addEventListener('pointercancel', (e) => {
+                    cell.classList.remove('active');
+                    if (holdTimer) clearTimeout(holdTimer);
+                    if (isDragging && dragSourceInfo) {
+                        mapData[r][c] = dragSourceInfo.item;
+                        updateCellVisual(cell, dragSourceInfo.item);
+                        if (dragGhost) dragGhost.remove();
+                        document.getElementById('eraserZone').classList.remove('drag-over');
+                        isDragging = false;
+                        updateLaser();
+                    }
+                    dragSourceInfo = null;
+                });
+
+                gridElement.appendChild(cell);
+            }
+        }
+
+        // --- 5. 시각화 (배지) ---
+        function updateCellVisual(cell, data) {
+            if (!data) { cell.innerHTML = ''; return; }
+            let rot = data.rotation || 0;
+            let svgHtml = TOOL_DICT[data.type]?.svg || '';
+            
+            let badges = '';
+            if (data.isInventory) {
+                badges += `<span class="badge-inv" title="유저 지급">🎒</span>`;
+                if (!data.canRotate) badges += `<span style="color:#e74c3c;" title="회전 불가">🔒</span>`;
+            } else {
+                if (data.canRotate) badges += `<span style="color:#2980b9;" title="회전 가능">🔄</span>`;
+            }
+
+            cell.innerHTML = `
+                <div class="item" style="transform: rotate(${rot}deg);">${svgHtml}</div>
+                <div class="modifier-icons">${badges}</div>
+            `;
+        }
+
+        function isAdvancedType(type) {
+            return false; // 현재 초급만 있으므로 모두 90도 회전
+        }
+
+        function executeRotation(r, c) {
+            let item = mapData[r][c];
+            if (!item) return;
+            let step = (['mirror_45', 'half_mirror_45'].includes(item.type) || (['ray', 'target'].includes(item.type) && isAdvancedMap())) ? 45 : 90;
+            
+            if (step === 90 && item.rotation % 90 !== 0) {
+                item.rotation = (Math.floor(item.rotation / 90) * 90 + 90) % 360;
+            } else {
+                item.rotation = (item.rotation + step) % 360;
+            }
+        }
+
+        function isAdvancedMap() {
+            return mapData.flat().some(cell => cell && isAdvancedType(cell.type));
+        }
+
+        // --- 6. 레이저 시뮬레이션 (경계면 정지 로직 추가) ---
+        const DIRS = { 
+            0: {dx: 1, dy: 0}, 45: {dx: 1, dy: 1}, 90: {dx: 0, dy: 1}, 135: {dx: -1, dy: 1}, 
+            180: {dx: -1, dy: 0}, 225: {dx: -1, dy: -1}, 270: {dx: 0, dy: -1}, 315: {dx: 1, dy: -1} 
+        };
+
+        function calculateReflection(inDir, surfaceAngle) { return (2 * surfaceAngle - inDir + 720) % 360; }
+
+        function simulateLaser() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let beams = []; 
+            let visited = new Set(); 
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (mapData[r][c] && mapData[r][c].type === 'ray') beams.push({ x: c, y: r, dir: mapData[r][c].rotation || 0 });
+                }
+            }
+            if(beams.length === 0) return;
+
+            ctx.lineWidth = 6; ctx.strokeStyle = "#e74c3c"; ctx.lineCap = "round";
+            ctx.shadowBlur = 10; ctx.shadowColor = "rgba(231,76,60,0.5)";
+            
+            while(beams.length > 0) {
+                let currentBeam = beams.shift(); 
+                let cx = currentBeam.x, cy = currentBeam.y, cDir = currentBeam.dir;
+                let nextX = cx + DIRS[cDir].dx, nextY = cy + DIRS[cDir].dy;
+                
+                // 맵 밖으로 나가면 경계선에서 정지
+                if(nextX < 0 || nextX >= GRID_SIZE || nextY < 0 || nextY >= GRID_SIZE) { 
+                    drawLine(cx, cy, nextX, nextY, true); 
+                    continue; 
+                }
+                
+                let stateKey = `${nextX},${nextY},${cDir}`;
+                if(visited.has(stateKey)) {
+                    drawLine(cx, cy, nextX, nextY, false);
+                    continue;
+                }
+                visited.add(stateKey);
+                
+                let item = mapData[nextY][nextX];
+                
+                if (!item) { 
+                    drawLine(cx, cy, nextX, nextY, false); // 통과
+                    beams.push({x: nextX, y: nextY, dir: cDir}); 
+                }
+                else if (item.type === 'block') {
+                    drawLine(cx, cy, nextX, nextY, true); // 벽에 부딪힘 (겉면 정지)
+                }
+                else if (item.type === 'ray' || item.type === 'target') {
+                    drawLine(cx, cy, nextX, nextY, false); // 중앙까지 빛 도달 후 흡수
+                }
+                else if(item.type === 'mirror_45') { 
+                    drawLine(cx, cy, nextX, nextY, false);
+                    let surfaceAngle = (337.5 + item.rotation) % 360;
+                    beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)}); 
+                }
+                else if(item.type === 'half_mirror_45') {
+                    drawLine(cx, cy, nextX, nextY, false);
+                    let surfaceAngle = (337.5 + item.rotation) % 360;
+                    beams.push({x: nextX, y: nextY, dir: cDir}); 
+                    beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)}); 
+                }
+                else if (['single_mirror', 'target_mirror_a', 'target_mirror_b'].includes(item.type)) {
+                    let normal = (225 + item.rotation) % 360; 
+                    let surfaceAngle = (135 + item.rotation) % 360;
+                    let rel = (cDir - normal + 360) % 360;
+                    if (rel > 90 && rel < 270) {
+                        drawLine(cx, cy, nextX, nextY, false); // 반사면 타격
+                        beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)});
+                    } else {
+                        drawLine(cx, cy, nextX, nextY, true); // 뒷면 타격 (겉면 정지)
+                    }
+                }
+                else if (item.type === 'v_target_mirror' || item.type === 'v_mirror') {
+                    let normal = (item.type.includes('target')?270:90 + item.rotation) % 360;
+                    let surfaceAngle = (0 + item.rotation) % 360;
+                    let rel = (cDir - normal + 360) % 360;
+                    if (item.type==='v_mirror' || (rel > 90 && rel < 270)) {
+                        drawLine(cx, cy, nextX, nextY, false); // 반사
+                        beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)});
+                    } else {
+                        drawLine(cx, cy, nextX, nextY, true); // 뒷면 (겉면 정지)
+                    }
+                }
+                else if(item.type === 'mirror') { 
+                    drawLine(cx, cy, nextX, nextY, false); // 반사
+                    let surfaceAngle = (135 + item.rotation) % 360;
+                    beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)}); 
+                }
+                else if(item.type === 'half_mirror') {
+                    drawLine(cx, cy, nextX, nextY, false); // 통과 및 반사
+                    let surfaceAngle = (135 + item.rotation) % 360;
+                    beams.push({x: nextX, y: nextY, dir: cDir}); 
+                    beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)}); 
+                } 
+                else if(item.type === 'v_half_mirror') {
+                    drawLine(cx, cy, nextX, nextY, false);
+                    let surfaceAngle = (0 + item.rotation) % 360;
+                    beams.push({x: nextX, y: nextY, dir: cDir}); 
+                    beams.push({x: nextX, y: nextY, dir: calculateReflection(cDir, surfaceAngle)});
+                }
+                else if(item.type === 'tunnel') {
+                    let tunnelRot = item.rotation % 180;
+                    if ((tunnelRot === 0 && (cDir === 0 || cDir === 180)) || (tunnelRot === 90 && (cDir === 90 || cDir === 270))) {
+                        drawLine(cx, cy, nextX, nextY, false); // 방향이 맞으면 통과
+                        beams.push({x: nextX, y: nextY, dir: cDir});
+                    } else {
+                        drawLine(cx, cy, nextX, nextY, true); // 벽면 타격 (겉면 정지)
+                    }
+                }
+            }
+        }
+
+        function drawLine(startX, startY, endX, endY, stopAtEdge = false) {
+            let offset = CELL_SIZE / 2;
+            let x1 = startX * CELL_SIZE + offset, y1 = startY * CELL_SIZE + offset;
+            let x2, y2;
+
+            // stopAtEdge가 true면 타일의 중앙이 아닌 겉면(경계)까지만 선을 그림
+            if (stopAtEdge) {
+                x2 = (startX + endX) / 2 * CELL_SIZE + offset;
+                y2 = (startY + endY) / 2 * CELL_SIZE + offset;
+            } else {
+                x2 = endX * CELL_SIZE + offset;
+                y2 = endY * CELL_SIZE + offset;
+            }
+
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        }
+
+        // --- 7. JSON Import & Export ---
+        document.getElementById('importBtn').addEventListener('click', () => {
+            const jsonString = document.getElementById('jsonInput').value;
+            if (!jsonString.trim()) return showNoti("JSON 데이터를 입력해주세요.");
+            try {
+                const importedArray = JSON.parse(jsonString);
+                mapData = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(null));
+                
+                importedArray.forEach(item => {
+                    if (item.y >= 0 && item.y < GRID_SIZE && item.x >= 0 && item.x < GRID_SIZE) {
+                        mapData[item.y][item.x] = {
+                            type: item.type, 
+                            rotation: item.rotation || 0,
+                            canMove: item.canMove !== undefined ? item.canMove : false, 
+                            canRotate: item.canRotate !== undefined ? item.canRotate : false,
+                            isInventory: item.isInventory || false
+                        };
+                    }
+                });
+
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        const cell = document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
+                        updateCellVisual(cell, mapData[r][c]);
+                    }
+                }
+                
+                if (isEditorMode) toggleMode();
+                else {
+                    updateLaser();
+                    document.getElementById('modalOverlay').style.display = 'none';
+                    showNoti("맵 적용 완료!");
+                }
+            } catch (error) { alert("올바르지 않은 JSON 형식입니다."); }
+        });
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const exportArray = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (mapData[r][c]) {
+                        exportArray.push({
+                            x: c, y: r, type: mapData[r][c].type, rotation: mapData[r][c].rotation,
+                            canMove: mapData[r][c].canMove, canRotate: mapData[r][c].canRotate, isInventory: mapData[r][c].isInventory || false
+                        });
+                    }
+                }
+            }
+            const jsonStr = JSON.stringify(exportArray, null, 2);
+            document.getElementById('jsonInput').value = jsonStr;
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(jsonStr).then(() => showNoti("복사 완료!"));
+            } else {
+                showNoti("추출 완료! 텍스트를 복사해주세요.");
+            }
+        });
+
+    </script>
+</body>
+</html>
